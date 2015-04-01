@@ -37,6 +37,44 @@ strong{
 <script src="js/OrbitControls.js"></script>
 <script src="js/KeyboardState.js"></script>
 
+<script type="x-shader/x-fragment" id="fragmentShaderDepth">
+    uniform sampler2D texture;
+    varying vec2 vUV;
+
+    vec4 pack_depth(const in float depth) {
+
+        const vec4 bit_shift = vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0);
+        const vec4 bit_mask = vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);
+        vec4 res = fract(depth * bit_shift);
+        res -= res.xxyz * bit_mask;
+        return res;
+
+    }
+
+    void main() {
+
+        vec4 pixel = texture2D(texture, vUV);
+
+        if (pixel.a < 0.5) discard;
+
+        gl_FragData[0] = pack_depth(gl_FragCoord.z);
+
+    }
+</script>
+<script type="x-shader/x-vertex" id="vertexShaderDepth">
+    varying vec2 vUV;
+
+    void main() {
+
+        vUV = 1.0 * uv;
+
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+        gl_Position = projectionMatrix * mvPosition;
+
+    }
+</script>
+
 <script>
 var camera,scene,renderer,control,keyboard,clock;
 var ambientlight,spotlight;
@@ -105,7 +143,7 @@ function init() {
 	// FLOOR
 	var floorTexture = new THREE.ImageUtils.loadTexture( 'images/checkerboard.jpg' );
 	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping; 
-	floorTexture.repeat.set( 4, 4 );
+	//floorTexture.repeat.set( 4, 4 );
 	floor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800),
 		new THREE.MeshPhongMaterial( { map: floorTexture, side: THREE.DoubleSide }));
 	floor.position.set(0,-0.5,0);
@@ -128,7 +166,30 @@ function init() {
 									 bumpMap:tireSideBump,
 									 transparent: true,//for cut-out texture
 									 side:THREE.DoubleSide}));
+	
+    ///////////////////////////////////////////////////////////////////
+    var uniforms = {
+        texture: {
+            type: "t",
+            value: tireSide
+        }
+    };
+    var vertexShader = document.getElementById('vertexShaderDepth').textContent;
+    var fragmentShader = document.getElementById('fragmentShaderDepth').textContent;
+    tireCircle1.customDepthMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader
+    });
+
+    ///////////////////////////////////////////////////////////////////
+	
 	tireCircle2 = tireCircle1.clone();
+	tireCircle2.customDepthMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader
+    });
 	tireCircle1.position.set(0,0,5);
 	tireCircle2.position.set(0,0,-5);
 	tireCircle2.rotation.y = Math.PI;
@@ -150,7 +211,17 @@ function init() {
 	mySegway.add(tire2);
 	tire2.position.set(0,25,-30);
 	tireCircle3 = tireCircle1.clone();
+	tireCircle3.customDepthMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader
+    });
 	tireCircle4 = tireCircle2.clone();
+	tireCircle4.customDepthMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader
+    });
 	tireCylinder2 = tireCylinder1.clone();
 	tire2.add(tireCircle3);
 	tire2.add(tireCircle4);
