@@ -1,0 +1,551 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>I4A01_Hw5</title>
+<style type="text/css">
+#container {
+    width:42%;
+    float:left;
+}
+#cnvsFrame {
+    height: 0;
+    padding-bottom:100%;
+}
+#info {
+	text-align: center;
+	color: #000000;
+	font-family:"Times New Roman";
+	font-size: 40px;
+}
+body {
+	background-color: #fee7cb;
+    overflow: auto;
+}
+.flc {
+    float:right;
+    margin:2px;
+    width:18%;
+}
+</style>
+</head>
+<body>
+<div id="info">I4A01's主題展示</div>
+<hr/>
+<div id="container">
+<div id="cnvsFrame">
+    <canvas id="cnvs"></canvas>
+</div>
+</div>
+<img onclick="javascript:pickImg(1);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/angelV1.jpg" alt="angelV1"/>
+<img onclick="javascript:pickImg(2);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/archangel.jpg" alt="archangel"/>
+<img onclick="javascript:pickImg(3);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/castleAndDragons.jpg" alt="castleAndDragons"/>
+<img onclick="javascript:pickImg(4);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/fantasyGirl2.jpg" alt="fantasyGirl2"/>
+<img onclick="javascript:pickImg(5);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/fantasyScenery.jpg" alt="fantasyScenery"/>
+<img onclick="javascript:pickImg(6);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/fantasyTiger.jpg" alt="fantasyTiger"/>
+<img onclick="javascript:pickImg(7);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/pursuit.jpg" alt="pursuit"/>
+<img onclick="javascript:pickImg(8);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/sailingShip.jpg" alt="sailingShip"/>
+<img onclick="javascript:pickImg(9);" onmouseenter="javascript:myMouseIn();" onmouseleave="javascript:myMouseOut();" title="點擊選擇" class="flc" src="images/surrealPainting.jpg" alt="surrealPainting"/>
+<div style="clear:both"></div>
+<hr/>
+<button onclick="javascript:saveSet();" id="svBtn">儲存設定</button>
+<button onclick="javascript:loadSet();" id="ldBtn">讀回設定</button>
+&nbsp;&nbsp;1.右方選擇圖畫&nbsp;&nbsp;&nbsp;2.左方選擇牆面
+
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/janda_manatee_solid_regular.typeface.js"></script>
+
+<script type="x-shader/x-fragment" id="fragmentShaderDepth">
+    uniform sampler2D texture;
+    varying vec2 vUV;
+
+    vec4 pack_depth(const in float depth) {
+
+        const vec4 bit_shift = vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0);
+        const vec4 bit_mask = vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);
+        vec4 res = fract(depth * bit_shift);
+        res -= res.xxyz * bit_mask;
+        return res;
+
+    }
+
+    void main() {
+
+        vec4 pixel = texture2D(texture, vUV);
+
+        if (pixel.a < 0.5) discard;
+
+        gl_FragData[0] = pack_depth(gl_FragCoord.z);
+
+    }
+</script>
+<script type="x-shader/x-vertex" id="vertexShaderDepth">
+    varying vec2 vUV;
+
+    void main() {
+
+        vUV = 1.0 * uv;
+
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+        gl_Position = projectionMatrix * mvPosition;
+
+    }
+</script>
+
+<script>
+var theCanvas,theCanvasFrame;
+var camera,scene,renderer,control;
+
+var ambientlight,spotlight1,spotlight2,spotlight3,spotlight4,spotlight5,spotAngle=0,dt;
+var floor,lamp,mesh;
+
+var wallImg = new THREE.ImageUtils.loadTexture('images/gavatexWall.jpg');
+var Wall=function(name,w,h,d,x,y,z,angle){
+	this.myPlane = new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({color: 0xff0000,opacity:0,transparent:true}));
+	this.myPlane.position.set(x,y,z);
+	this.myPlane.rotation.y = angle;
+	this.myPlane.name=name;
+	
+	this.myBox = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+		new THREE.MeshPhongMaterial({map:wallImg,bumpMap:wallImg}));
+	this.myBox.position.set(0,0,-d/2-0.04);
+	this.myPlane.add(this.myBox);
+};//class
+var wall1,wall2,wall3,wall4;//instance
+var picture1,picture2,picture3,picture4;
+var pick1=false,pick2=false,pick3=false,pick4=false;
+
+var img1 = new THREE.ImageUtils.loadTexture('images/angelV1.jpg');
+var img2 = new THREE.ImageUtils.loadTexture('images/archangel.jpg');
+var img3 = new THREE.ImageUtils.loadTexture('images/castleAndDragons.jpg');
+var img4 = new THREE.ImageUtils.loadTexture('images/fantasyGirl2.jpg');
+var img5 = new THREE.ImageUtils.loadTexture('images/fantasyScenery.jpg');
+var img6 = new THREE.ImageUtils.loadTexture('images/fantasyTiger.jpg');
+var img7 = new THREE.ImageUtils.loadTexture('images/pursuit.jpg');
+var img8 = new THREE.ImageUtils.loadTexture('images/sailingShip.jpg');
+var img9 = new THREE.ImageUtils.loadTexture('images/surrealPainting.jpg');
+var useImg=img3,useNo=3;//default
+var no1=3,no2=3,no3=3,no4=3;
+
+var raycaster;
+var mouse = new THREE.Vector2();
+var pickables = [];
+
+var textMesh;
+
+init();
+animate();
+
+function init() {
+	theCanvas = document.getElementById("cnvs");
+	theCanvasFrame = document.getElementById("cnvsFrame");
+	renderer = new THREE.WebGLRenderer({canvas:theCanvas,antialias:true});
+	
+	renderer.setSize(theCanvasFrame.clientWidth,theCanvasFrame.clientHeight);
+	renderer.setClearColor(0xdddddd);
+	//////////for//shadow////////
+	renderer.shadowMapEnabled = true;
+	renderer.shadowMapType = THREE.PCFShadowMap;
+	/////////////////////////////
+	window.addEventListener('resize', onWindowResize, false);
+	
+	scene = new THREE.Scene();
+	camera = new THREE.PerspectiveCamera(50, theCanvasFrame.clientWidth / theCanvasFrame.clientHeight, 1, 5000);
+	camera.position.x = 300;
+	camera.position.y = 200;
+	camera.position.z = 600;
+	scene.add(camera);
+	
+	control = new THREE.OrbitControls(camera, renderer.domElement);
+	
+	/*var gridXZ = new THREE.GridHelper(400, 40);
+	gridXZ.setColors(new THREE.Color(0xff0000), new THREE.Color(0xffffff));
+	scene.add(gridXZ);*/
+	
+	ambientlight = new THREE.AmbientLight(0xdddddd);
+	scene.add(ambientlight);
+	////////////////spotlight//////////////////////
+	spotlight1 = new THREE.SpotLight(0xfee7cb);
+	spotlight1.position.set(-140,200,-140);
+	spotlight1.castShadow = true;
+	spotlight1.shadowCameraNear = 50;
+	spotlight1.shadowCameraFar = camera.far;
+	spotlight1.shadowCameraFov = 60;
+	spotlight1.shadowBias = -0.00022;
+	spotlight1.shadowDarkness = 0.6;
+	spotlight1.shadowMapWidth = 2048;
+	spotlight1.shadowMapHeight = 2048;
+	scene.add(spotlight1);
+	spotlight2 = spotlight1.clone();
+	spotlight2.position.set(0,200,-230);
+	scene.add(spotlight2);
+	spotlight3 = spotlight1.clone();
+	spotlight3.position.set(140,200,-140);
+	scene.add(spotlight3);
+	spotlight4 = spotlight1.clone();
+	spotlight4.position.set(-200,200,80);
+	scene.add(spotlight4);
+	spotlight5 = spotlight1.clone();
+	spotlight5.position.set(0,400,0);
+	scene.add(spotlight5);
+	scene.add(spotlight5.target);
+	lamp = new THREE.Object3D();
+	mesh = new THREE.Mesh(new THREE.CylinderGeometry(30,90,60,20,1,true),new THREE.MeshBasicMaterial({color:0xedd6ba,side:THREE.DoubleSide}));
+	mesh.position.set(0,-30,0);
+	lamp.add(mesh);
+	lamp.position.set(0,400,0);
+	scene.add(lamp);	
+	///////////////////////////////////////////////
+	// FLOOR
+	var floorTexture = new THREE.ImageUtils.loadTexture( 'images/DragonCherry_texture.jpg' );
+	var floorBump = new THREE.ImageUtils.loadTexture( 'images/DragonCherry_bump.jpg' );
+	var floorNormal = new THREE.ImageUtils.loadTexture( 'images/DragonCherry_normal.jpg' );
+	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+	floorBump.wrapS = floorBump.wrapT = THREE.RepeatWrapping;
+	floorNormal.wrapS = floorNormal.wrapT = THREE.RepeatWrapping;
+	floorTexture.repeat.set( 8, 8 );
+	floorBump.repeat.set( 8, 8 );
+	floorNormal.repeat.set( 8, 8 );
+	floor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800),
+		new THREE.MeshPhongMaterial({map:floorTexture,bumpMap:floorBump,normalMap:floorNormal,side:THREE.DoubleSide}));
+	floor.position.set(0,-0.5,0);
+	floor.rotation.x = Math.PI/2;
+	scene.add(floor);
+	
+	wall1 = new Wall("myPlane1",250,180,20,-210,90,-190,Math.PI/3);
+	scene.add(wall1.myPlane);
+	wall2 = new Wall("myPlane2",250,180,20,0,90,-310,0);
+	scene.add(wall2.myPlane);
+	wall3 = new Wall("myPlane3",250,180,20,210,90,-190,-Math.PI/3);
+	scene.add(wall3.myPlane);
+	wall4 = new Wall("myPlane4",250,180,20,-280,90,80,Math.PI/2);
+	scene.add(wall4.myPlane);
+	
+	picture1 = new THREE.Mesh(
+    new THREE.PlaneGeometry(128, 96),
+    new THREE.MeshPhongMaterial({
+        map: useImg,
+        polygonOffset: true,
+        polygonOffsetUnits: -4.0,
+        polygonOffsetFactor: -1.0,
+		side:THREE.DoubleSide
+    }));
+	picture2 = new THREE.Mesh(
+    new THREE.PlaneGeometry(128, 96),
+    new THREE.MeshPhongMaterial({
+        map: useImg,
+        polygonOffset: true,
+        polygonOffsetUnits: -4.0,
+        polygonOffsetFactor: -1.0,
+		side:THREE.DoubleSide
+    }));
+	picture3 = new THREE.Mesh(
+    new THREE.PlaneGeometry(128, 96),
+    new THREE.MeshPhongMaterial({
+        map: useImg,
+        polygonOffset: true,
+        polygonOffsetUnits: -4.0,
+        polygonOffsetFactor: -1.0,
+		side:THREE.DoubleSide
+    }));
+	picture4 = new THREE.Mesh(
+    new THREE.PlaneGeometry(128, 96),
+    new THREE.MeshPhongMaterial({
+        map: useImg,
+        polygonOffset: true,
+        polygonOffsetUnits: -4.0,
+        polygonOffsetFactor: -1.0,
+		side:THREE.DoubleSide
+    }));
+	
+	pickables = [wall1.myPlane,wall2.myPlane,wall3.myPlane,wall4.myPlane];
+	
+	raycaster = new THREE.Raycaster();
+	theCanvas.addEventListener('mousedown', onDocumentMouseDown, false);
+    theCanvas.addEventListener('mousemove', onDocumentMouseMove, false);
+	/*text*/
+	var material = new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0xf5aa0c});
+	var textGeom = new THREE.TextGeometry( 'FANTASY', {
+	size: 50, height: 2, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 2, bevelSize: 1, bevelEnabled: true
+	});
+	textMesh = new THREE.Mesh( textGeom, material );
+	textGeom.computeBoundingBox();
+	textMesh.position.set(-80,5,0);
+	//textMesh.receiveShadow = true;
+	//textMesh.castShadow = true;
+	scene.add( textMesh );
+	/**/
+	///////////////////////////////////////////////////////////////////
+    /*var uniforms = {
+        texture: {
+            type: "t",
+            value: tireSide
+        }
+    };
+    var vertexShader = document.getElementById('vertexShaderDepth').textContent;
+    var fragmentShader = document.getElementById('fragmentShaderDepth').textContent;
+    tireCircle1.customDepthMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader
+    });*/
+    ///////////////////////////////////////////////////////////////////
+	
+	////////shadow//////////
+	scene.traverse(function (mesh){
+		if(mesh instanceof(THREE.Mesh)){
+			mesh.castShadow = true;
+			//mesh.receiveShadow = true;
+		}
+	});
+	floor.castShadow = true;
+	floor.receiveShadow = true;
+	////cast&receive=true///
+	spotlight1.target=wall1.myPlane;
+	spotlight2.target=wall2.myPlane;
+	spotlight3.target=wall3.myPlane;
+	spotlight4.target=wall4.myPlane;
+}
+
+function onWindowResize() {
+	camera.aspect = theCanvasFrame.clientWidth / theCanvasFrame.clientHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize(theCanvasFrame.clientWidth, theCanvasFrame.clientHeight);
+}
+
+function animate() {
+	control.update();
+	if(spotAngle<=0){
+		dt=0.02;
+	}else if(spotAngle>=Math.PI){
+		dt=-0.02;
+	}
+	spotAngle+=dt;
+	spotlight5.target.position.set(100 * Math.cos(spotAngle),100,-100 * Math.sin(spotAngle));
+	// rotating lamp
+    var axis = new THREE.Vector3();
+    var d = new THREE.Vector3();
+    var p = new THREE.Vector3();
+    p = spotlight5.target.position.clone().sub(new THREE.Vector3(0, 400, 0)).normalize();
+    d = new THREE.Vector3(0, -1, 0);
+    axis.crossVectors(d, p).normalize();
+    var rotangle = Math.acos(d.dot(p));
+	// undocumented API
+    lamp.setRotationFromAxisAngle(axis, rotangle);
+	
+	render();
+	requestAnimationFrame(animate);
+}
+
+function render() {
+	//control.target.set(pos.x,pos.y,pos.z);
+	renderer.render(scene, camera);
+}
+
+function myMouseIn(){
+	document.body.style.cursor = 'pointer';
+}
+
+function myMouseOut(){
+	document.body.style.cursor = 'auto';
+}
+
+function saveSet(){
+	var obj1 ={};
+	obj1.pick=pick1;
+	obj1.x = picture1.position.x;
+	obj1.y = picture1.position.y;
+	obj1.z = picture1.position.z;
+	obj1.angle = picture1.rotation.y;
+	obj1.no = no1;
+	var objStr1 = JSON.stringify(obj1);
+    localStorage.setItem("picture1", objStr1);
+	//////////////////////////////////////////
+	var obj2 ={};
+	obj2.pick=pick2;
+	obj2.x = picture2.position.x;
+	obj2.y = picture2.position.y;
+	obj2.z = picture2.position.z;
+	obj2.angle = picture2.rotation.y;
+	obj2.no = no2;
+	var objStr2 = JSON.stringify(obj2);
+    localStorage.setItem("picture2", objStr2);
+	//////////////////////////////////////////
+	var obj3 ={};
+	obj3.pick=pick3;
+	obj3.x = picture3.position.x;
+	obj3.y = picture3.position.y;
+	obj3.z = picture3.position.z;
+	obj3.angle = picture3.rotation.y;
+	obj3.no = no3;
+	var objStr3 = JSON.stringify(obj3);
+    localStorage.setItem("picture3", objStr3);
+	//////////////////////////////////////////
+	var obj4 ={};
+	obj4.pick=pick4;
+	obj4.x = picture4.position.x;
+	obj4.y = picture4.position.y;
+	obj4.z = picture4.position.z;
+	obj4.angle = picture4.rotation.y;
+	obj4.no = no4;
+	var objStr4 = JSON.stringify(obj4);
+    localStorage.setItem("picture4", objStr4);
+	//////////////////////////////////////////
+	alert("儲存完畢");
+}
+
+function loadSet(){
+	var objStr1 = localStorage.getItem("picture1");
+	var obj1 = JSON.parse(objStr1);
+	pick1=obj1.pick;
+	no1 = obj1.no;
+	if(pick1){
+		picture1.position.set(obj1.x,obj1.y,obj1.z);
+		picture1.rotation.y = obj1.angle;
+		pickImg(no1);
+		picture1.material.map = useImg;
+		scene.add(picture1);
+	}
+	////////////////////////////////////////////////
+	var objStr2 = localStorage.getItem("picture2");
+	var obj2 = JSON.parse(objStr2);
+	pick2=obj2.pick;
+	no2 = obj2.no;
+	if(pick2){
+		picture2.position.set(obj2.x,obj2.y,obj2.z);
+		picture2.rotation.y = obj2.angle;
+		pickImg(no2);
+		picture2.material.map = useImg;
+		scene.add(picture2);
+	}
+	////////////////////////////////////////////////
+	var objStr3 = localStorage.getItem("picture3");
+	var obj3 = JSON.parse(objStr3);
+	pick3=obj3.pick;
+	no3 = obj3.no;
+	if(pick3){
+		picture3.position.set(obj3.x,obj3.y,obj3.z);
+		picture3.rotation.y = obj3.angle;
+		pickImg(no3);
+		picture3.material.map = useImg;
+		scene.add(picture3);
+	}
+	////////////////////////////////////////////////
+	var objStr4 = localStorage.getItem("picture4");
+	var obj4 = JSON.parse(objStr4);
+	pick4=obj4.pick;
+	no4 = obj4.no;
+	if(pick4){
+		picture4.position.set(obj4.x,obj4.y,obj4.z);
+		picture4.rotation.y = obj4.angle;
+		pickImg(no4);
+		picture4.material.map = useImg;
+		scene.add(picture4);
+	}
+	////////////////////////////////////////////////
+	alert("讀回完畢");
+}
+
+function pickImg(no){
+	useNo = no;
+	switch(no){
+		case 1:
+			useImg = img1;
+			break;
+		case 2:
+			useImg = img2;
+			break;
+		case 3:
+			useImg = img3;
+			break;
+		case 4:
+			useImg = img4;
+			break;
+		case 5:
+			useImg = img5;
+			break;
+		case 6:
+			useImg = img6;
+			break;
+		case 7:
+			useImg = img7;
+			break;
+		case 8:
+			useImg = img8;
+			break;
+		case 9:
+			useImg = img9;
+			break;
+	}
+}
+
+function onDocumentMouseDown(event) {
+    // PICKING DETAILS: 
+    // convert mouse.xy = [-1,1]^2 (NDC)
+    // unproject (mouse.xy, 1) to a point on the far plane (in world coordinate)
+    // set raycaster (origin, direction)
+    // find intersection objects, (closest first) 
+    // each record as
+    // [ { distance, point, face, faceIndex, object }, ... ]
+    event.preventDefault();
+    mouse.x = ((event.clientX-5) / theCanvasFrame.clientWidth) * 2 - 1;
+    mouse.y = -((event.clientY-75) / theCanvasFrame.clientHeight) * 2 + 1;
+    // find intersections
+    var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
+    raycaster.set(camera.position, vector.sub(camera.position).normalize());
+    var intersects = raycaster.intersectObjects(pickables);
+    if (intersects.length > 0) {
+		if(intersects[0].object.name=="myPlane1"){
+			scene.add(picture1);
+			picture1.material.map = useImg;
+			picture1.position.copy(intersects[0].point);
+			picture1.rotation.copy (intersects[0].object.rotation);
+			pick1=true;
+			no1=useNo;
+		}else if(intersects[0].object.name=="myPlane2"){
+			scene.add(picture2);
+			picture2.material.map = useImg;
+			picture2.position.copy(intersects[0].point);
+			picture2.rotation.copy (intersects[0].object.rotation);
+			pick2=true;
+			no2=useNo;
+		}else if(intersects[0].object.name=="myPlane3"){
+			scene.add(picture3);
+			picture3.material.map = useImg;
+			picture3.position.copy(intersects[0].point);
+			picture3.rotation.copy (intersects[0].object.rotation);
+			pick3=true;
+			no3=useNo;
+		}else if(intersects[0].object.name=="myPlane4"){
+			scene.add(picture4);
+			picture4.material.map = useImg;
+			picture4.position.copy(intersects[0].point);
+			picture4.rotation.copy (intersects[0].object.rotation);
+			pick4=true;
+			no4=useNo;
+		}
+    }
+}
+
+function onDocumentMouseMove(event) {
+    event.preventDefault();
+    mouse.x = ((event.clientX-5) / theCanvasFrame.clientWidth) * 2 - 1;
+    mouse.y = -((event.clientY-75) / theCanvasFrame.clientHeight) * 2 + 1;
+
+    var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
+    raycaster.set(camera.position, vector.sub(camera.position).normalize());
+    var intersects = raycaster.intersectObjects(pickables);
+
+    if (intersects.length > 0) {
+        document.body.style.cursor = 'pointer';
+    } else {
+        document.body.style.cursor = 'auto';
+    }
+}
+</script>
+</body>
+</html>
