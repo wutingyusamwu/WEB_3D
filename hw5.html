@@ -492,8 +492,8 @@ function onDocumentMouseDown(event) {
     // each record as
     // [ { distance, point, face, faceIndex, object }, ... ]
     event.preventDefault();
-    mouse.x = ((event.clientX-5) / theCanvasFrame.clientWidth) * 2 - 1;
-    mouse.y = -((event.clientY-75) / theCanvasFrame.clientHeight) * 2 + 1;
+    mouse.x = ((event.clientX-event.target.offsetLeft) / theCanvasFrame.clientWidth) * 2 - 1;
+    mouse.y = -((event.clientY-event.target.offsetTop) / theCanvasFrame.clientHeight) * 2 + 1;
     // find intersections
     var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
     raycaster.set(camera.position, vector.sub(camera.position).normalize());
@@ -533,8 +533,8 @@ function onDocumentMouseDown(event) {
 
 function onDocumentMouseMove(event) {
     event.preventDefault();
-    mouse.x = ((event.clientX-5) / theCanvasFrame.clientWidth) * 2 - 1;
-    mouse.y = -((event.clientY-75) / theCanvasFrame.clientHeight) * 2 + 1;
+    mouse.x = ((event.clientX-event.target.offsetLeft) / theCanvasFrame.clientWidth) * 2 - 1;
+    mouse.y = -((event.clientY-event.target.offsetTop) / theCanvasFrame.clientHeight) * 2 + 1;
 
     var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
     raycaster.set(camera.position, vector.sub(camera.position).normalize());
