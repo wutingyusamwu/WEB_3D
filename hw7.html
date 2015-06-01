@@ -1,0 +1,1004 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>I4A01_Hw7</title>
+<style type="text/css">
+#cnvsFrame {
+    float:left;
+	width:60vw;
+	height:40vw;
+}
+#info {
+	text-align: center;
+	color: #000000;
+	font-family:"Times New Roman";
+	font-size: 40px;
+}
+body {
+	background-color: #fee7cb;
+    overflow: hidden;
+}
+#menu{
+	float:left;
+	margin-left:10px;
+	width:30vw;
+}
+</style>
+</head>
+<body>
+<div id="info">I4A01's Final WrapUp(Game)</div>
+<hr/>
+<div id="cnvsFrame">
+    <canvas id="cnvs"></canvas>
+</div>
+<div id="menu">
+	<div id="login">
+	User Name:
+	<input id="user" style="width:100%" type="text" value="Mickey"/><br/>
+	<br/>
+	<button id="loginBtn" style="width:100%" onclick="javascript:loginBtnClick();">Login</button><br/>
+	<br/>
+	</div>
+	
+	<div id="settings">
+		BGM:<button id="BGMBtn" style="width:30%" onclick="javascript:BGMBtnClick();">On</button><br/>
+		SE:&nbsp;&nbsp;&nbsp;<button id="SEBtn" style="width:30%" onclick="javascript:SEBtnClick();">On</button>
+	</div>
+	
+	<div id="logined" style="display:none">
+	<button id="startBtn" style="width:45%" onclick="javascript:start();">Start</button>
+	<button id="logoutBtn" style="width:45%" onclick="javascript:logoutBtnClick();">Logout</button>
+	</div>
+	<p id='greeting'></p>
+</div>
+<div style="clear:both"></div>
+<hr/>
+<p>遊戲說明: 平台上最多只會有3顆球,經過60秒後,球門會變寬.</P>
+
+<audio id="BGM" autoplay loop style="display:none">
+<source src="sounds/loop_109.wav" type='audio/wav'>
+</audio>
+
+<audio id="collisionSound" style="display:none">
+<source src="sounds/LASER.wav" type='audio/wav'>
+</audio>
+
+<audio id="fallSound" style="display:none">
+<source src="sounds/fall.mp3" type='audio/mp3'>
+</audio>
+
+<audio id="startSound" style="display:none">
+<source src="sounds/start_game.mp3" type='audio/mp3'>
+</audio>
+
+<audio id="overSound" style="display:none">
+<source src="sounds/question.mp3" type='audio/mp3'>
+</audio>
+
+<script src="js/three.min.js"></script> 
+<!--<script src="js/OrbitControls.js"></script>-->
+<script src="js/Stats.js"></script>
+<script src="js/janda_manatee_solid_regular.typeface.js"></script>
+<script id="vertexShader" type="x-shader/x-vertex">
+    varying vec2 vUv;
+    
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+</script>
+<script id="fragmentShader1" type="x-shader/x-fragment">
+    uniform float time;
+    varying vec2 vUv;
+    
+    void main(){
+	   float x = vUv.x;
+	   float y = vUv.y;
+	   float mov0 = x+y+cos(sin(time)*2.)*100.+sin(x/100.)*1000.;
+	   float mov1 = y / 0.8 / 0.2 + time;
+	   float mov2 = x / 0.8 / 0.2;
+	   float c1 = abs(sin(mov1+time)/2.+mov2/2.-mov1-mov2+time);
+	   float c2 = abs(sin(c1+sin(mov0/1000.+time)+sin(y/1.+time)+sin((x+y)/100.)*1.));
+	   float c3 = abs(sin(c2+cos(mov1+mov2+c2)+cos(mov2)+sin(x/1000.)));
+	   gl_FragColor = vec4( c1,c2,c3,1.0);
+	}
+</script>
+<script id="fragmentShader2" type="x-shader/x-fragment">
+    uniform float time;
+    varying vec2 vUv;
+    #define PI 3.141592
+
+	float center(float interval){
+		return interval*0.5+0.5;
+	}
+
+	float calcColor(float centerX, float centerY, float phase, float freq){
+		vec2 p = ( vUv.xy / vec2(1.0,1.0) );
+		p = p*2.0 - 1.0;
+		p.x *= 1.0;
+		
+		float col = 0.;
+		col = distance(vec2(centerX, centerY), p);
+		col = center(sin(col*PI*freq + PI/3.0 * phase));
+		return smoothstep(.4 + ((0.999 - 0.4) * sin(4. * time + (cos(time)))), 1., col);
+	}
+
+	void main( void ) {
+		float colX = 0.0;
+		float colY = 0.0;
+		float colZ = 0.0;
+		
+		colX = calcColor(cos(time), sin(time), sin(time) * (10. * cos(time)), 4. * sin(time));
+		colY = calcColor(cos(time), sin(time), sin(time) * (01. * cos(time)), 2. * sin(time));
+		colZ = calcColor(cos(time), sin(time), sin(time) * (5. * cos(time)), 1. * sin(time));
+
+		gl_FragColor = vec4( colX, colY, colZ, 1.0 );
+
+	}
+</script>
+<script id="fragmentShader3" type="x-shader/x-fragment">
+    uniform float time;
+    varying vec2 vUv;
+    vec2 R = vec2(0.55,0.7);
+	vec2 Offset;
+	vec2 Scale=vec2(0.005,0.005);
+	float Saturation = 0.8; // 0 - 1;
+
+	vec3 lungth(vec2 x,vec3 c){
+		   return vec3(length(x+c.r),length(x+c.g),length(c.b));
+	}
+
+	void main( void ) {
+		
+		vec2 position = (vUv.xy - R * 0.9) / R.yy;
+		float th = atan(position.y, position.x) / (1.0 * 3.1415926);
+		float dd = length(position) + 0.005;
+		float d = 0.5 / dd + time;
+		
+			vec2 x = vUv.xy;
+			vec3 c2=vec3(0,0,0);
+		x=x*Scale*R/R.x;
+			x+=sin(x.yx*sqrt(vec2(1,9)))/10.0;
+			c2=lungth(sin(x*sqrt(vec2(3,43))),vec3(5,6,7)*Saturation * d);
+		x+=sin(x.yx*sqrt(vec2(73,5)))/5.0;
+			c2=2.*lungth(sin(time+x*sqrt(vec2(33.,23.))),c2/9.0);
+			x+=sin(x.yx*sqrt(vec2(93,7)))/3.0;
+			c2=lungth(sin(x*sqrt(vec2(3.,1.))),c2/2.0);
+			c2=.5+.5*sin(c2*8.);
+		
+		vec3 uv = vec3(th + d, th - d, th + sin(d) * 0.45);
+		float a = 0.5 + cos(uv.x * 3.1415926 * 2.0) * 0.5;
+		float b = 0.5 + cos(uv.y * 3.1415926 * 2.0) * 0.5;
+		float c = 0.5 + cos(uv.z * 3.1415926 * 6.0) * 0.5;
+		vec3 color = 	mix(vec3(0.1, 0.5, 0.5), 	vec3(0.1, 0.1, 0.2),  pow(a, 0.2)) * 3.;
+		color += 	mix(vec3(0.1, 0.2, 1.0), 	vec3(0.1, 0.1, 0.2),  pow(b, 0.1)) * 0.75;
+		color += 	mix(c2, 			vec3(0.1, 0.2, 0.2),  pow(c, 0.1)) * 0.75;
+
+		gl_FragColor = vec4( (color * dd), 1.0);
+	}
+</script>
+<script id="fragmentShader4" type="x-shader/x-fragment">
+    uniform float time;
+    varying vec2 vUv;
+    
+    vec2 test = vec2(1.0,1.0);
+
+	mat2 rotate( float a )
+	{
+		return mat2( cos( a ), -sin( a ), sin( a ), cos( a ) );
+	}
+
+	float hash( float n )
+	{
+		return( fract( sin( n ) * 43758.5453 ) );	
+	}
+
+	float noise( vec2 at )
+	{
+		vec2 p = floor( at );
+		vec2 k = fract( at );
+		k = k * k * ( 3.0 - 2.0 * k);
+		
+		float n = p.x + ( p.y * 57.0 );
+		
+		float a = hash( n );
+		float b = hash( n + 1.0 );
+		float c = hash( n + 57.0);
+		float d = hash( n + 58.0 );
+		
+		float res = mix( mix( a, b, k.x ), mix( c, d, k.x ), k.y );
+		
+		return res;
+	}
+
+	float fbm( vec2 at )
+	{
+		float f = 0.5000 * noise( at );
+		f * 2.02;
+		f += 0.2500 * noise( at );
+		f * 2.01;
+		f += 0.1250 * noise( at );
+		f * 2.03;
+		f += 0.0625 * noise( at );
+		return f;
+	}
+
+	void main( void ) {
+
+		vec2 pos = ( vUv.xy / test.xy );
+
+		//BACKGROUND EFFECTS
+		////////////////////
+		vec3 color = mix( vec3( 1.0 ), vec3( 1.0, 0.0, 1.0 ), pos.y );
+		color.gb -= noise( vec2( pos.x, pos.y - time / 1000.0 ) * ( 10.0 + mod( time / 10.0, 30.0 ) ) ) * cos( time / 2.0 );
+		color.gb -= noise( pos * ( -10.0 - mod( time / 10.0, 30.0 ) ) ) * sin( time / 2.0 );
+		
+		//CLOVER
+		////////	
+		
+		pos.x *= test.x / test.y;
+		
+		pos -= vec2( 0.5 * test.x / test.y, 0.5 );
+		pos *= rotate( - time );
+		
+		float r = 0.05 + 0.03 * sin( atan( pos.y, pos.x ) * 4.0 ) + 0.15;
+		//r -= 0.05 + 0.05 * cos( atan( pos.y, pos.x ) * 4.0 );
+		r = r * smoothstep( 0.145, 0.19, r );
+		color.rb *= smoothstep( r, r + 0.01, sqrt( dot( pos, pos ) ) );
+		
+		color.rb *= smoothstep( 0.0, 0.02, abs( pos.x + 0.52 - 0.5 * cos( length( pos ) * 2.7 ) ) + smoothstep( 0.00, 0.00, pos.y ) ) + smoothstep( 0.53, 0.55, length( pos ) );
+		
+		
+		gl_FragColor = vec4( vec3( color ), 1.0 );
+
+	}
+</script>
+
+<script>
+var BGM,collisionSound,fallSound,overSound,startSound;
+var BGMSwitch=false,SESwitch=false;
+var BGMVol=0.5,SEVol=0.5;
+var theCanvas,theCanvasFrame;
+var clock = new THREE.Clock();
+var stats;
+var camera,scene,renderer/*,control*/;
+var sceneHUD, cameraHUD;
+var ambientlight,spotlight,floor;
+var wall1,wall2,wall3,wall4,wall5,wall6;
+var Puck = function(material){
+	this.pos = new THREE.Vector3();
+	this.vel = new THREE.Vector3();
+	this.mesh = new THREE.Mesh(new THREE.CylinderGeometry(5,5,2,20),
+							   material);
+};
+Puck.prototype.update = function(dt){
+	this.pos.add(this.vel.clone().multiplyScalar(dt));
+	this.mesh.position.copy(this.pos);
+};
+Puck.prototype.collision = function(scene,pucks,i,wl,wr,pX,dir){
+	if (this.pos.x > 95) {
+        this.pos.x = 95;
+        this.vel.set(-this.vel.x, 0, this.vel.z);
+		collisionSound.play();
+    }else if (this.pos.x < -95) {
+        this.pos.x = -95;
+        this.vel.set(-this.vel.x, 0, this.vel.z);
+		collisionSound.play();
+    }else if(this.pos.x+5 < wr && this.pos.x-5 > wl){
+		if(this.pos.x < pX+25 && this.pos.x > pX-25){//catch
+			if (this.pos.z > 95) {
+				this.pos.z = 95;
+				this.vel.set(this.vel.x+dir*25, 0, -this.vel.z);
+				collisionSound.play();
+			}else if (this.pos.z < -95) {
+				this.pos.z = -95;
+				this.vel.set(this.vel.x+dir*25, 0, -this.vel.z);
+				collisionSound.play();
+			}
+		}
+		if (this.pos.z > 100 || this.pos.z < -100){//out
+			scene.remove(this.mesh);
+			pucks.splice(i,1);
+			subLife();
+			fallSound.play();
+		}
+	}
+	if(this.pos.x+5 >= wr || this.pos.x-5 <= wl){
+		if (this.pos.z > 95) {
+			this.pos.z = 95;
+			this.vel.set(this.vel.x, 0, -this.vel.z);
+			collisionSound.play();
+		}else if (this.pos.z < -95) {
+			this.pos.z = -95;
+			this.vel.set(this.vel.x, 0, -this.vel.z);
+			collisionSound.play();
+		}
+	}
+};
+var pucks=[];
+var puckMaterial1,puckMaterial2,puckMaterial3, puckStyle=0;
+
+var raycaster = new THREE.Raycaster();
+var mouse = new THREE.Vector2();
+var pickables = [];
+
+var paddle1,paddle2,lastPosX=0,newPosX=0,direction=0;
+
+var textTime,textLife,textH,textT,textS,textL,textOver,textStart;
+var geo0,geo1,geo2,geo3,geo4,geo5,geo6,geo7,geo8,geo9;
+var time=0,life=5;
+var gameover=false;
+var records=[];
+var userName,userHighScore=0;
+
+init();
+animate();
+
+function initHUD(){
+	sceneHUD = new THREE.Scene();
+    cameraHUD = new THREE.OrthographicCamera(-100, 100, 100, -100, -500, 500);
+    cameraHUD.position.z = 300;
+	/*textTime*/
+	var material = new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0xffff00});
+	var textGeom = new THREE.TextGeometry( 'Time:', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	textTime = new THREE.Mesh( textGeom, material );
+	textTime.position.set(-80,80,0);
+	sceneHUD.add( textTime );
+	/**/
+	/*textLife*/
+	var material2 = new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0xff0000});
+	var textGeom2 = new THREE.TextGeometry( 'Life:', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	textLife = new THREE.Mesh( textGeom2, material2 );
+	textLife.position.set(25,80,0);
+	sceneHUD.add( textLife );
+	/**/
+	
+	/*textOver*/
+	var material3 = new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0xfe893a});
+	var textGeom3 = new THREE.TextGeometry( 'Game Over', {
+	size: 20, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	textOver = new THREE.Mesh( textGeom3, material3 );
+	textOver.position.set(-70,0,0);
+	/**/
+	
+	/*textStart*/
+	var material4 = new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0xfe893a});
+	var textGeom4 = new THREE.TextGeometry( 'START !!', {
+	size: 20, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	textStart = new THREE.Mesh( textGeom4, material4 );
+	textStart.position.set(-55,0,0);
+	/**/
+	
+	/*numberGeometry*/
+	geo0 = new THREE.TextGeometry( '0', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo1 = new THREE.TextGeometry( '1', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo2 = new THREE.TextGeometry( '2', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo3 = new THREE.TextGeometry( '3', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo4 = new THREE.TextGeometry( '4', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo5 = new THREE.TextGeometry( '5', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo6 = new THREE.TextGeometry( '6', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo7 = new THREE.TextGeometry( '7', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo8 = new THREE.TextGeometry( '8', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	geo9 = new THREE.TextGeometry( '9', {
+	size: 10, height: 1, curveSegments: 5,
+	font: 'janda manatee solid', weight: 'normal',
+	bevelThickness: 0.1, bevelSize: 0.1, bevelEnabled: true
+	});
+	/**/
+	/*textH*/
+	textH = new THREE.Mesh( geo0.clone(), material );
+	textH.position.set(-45,80,0);
+	sceneHUD.add( textH );
+	/**/
+	/*textT*/
+	textT = new THREE.Mesh( geo0.clone(), material );
+	textT.position.set(-35,80,0);
+	sceneHUD.add( textT );
+	/**/
+	/*textS*/
+	textS = new THREE.Mesh( geo0.clone(), material );
+	textS.position.set(-25,80,0);
+	sceneHUD.add( textS );
+	/**/
+	/*textL*/
+	textL = new THREE.Mesh( geo5.clone(), material2 );
+	textL.position.set(60,80,0);
+	sceneHUD.add( textL );
+	/**/
+	
+}
+
+function init() {
+	BGM = document.getElementById ('BGM');
+	BGM.volume=BGMVol;
+	collisionSound = document.getElementById ('collisionSound');
+	collisionSound.volume=SEVol;
+	fallSound = document.getElementById ('fallSound');
+	fallSound.volume=SEVol;
+	overSound = document.getElementById ('overSound');
+	overSound.volume=SEVol;
+	startSound = document.getElementById ('startSound');
+	startSound.volume=SEVol;
+	
+	initHUD();
+	theCanvas = document.getElementById("cnvs");
+	theCanvasFrame = document.getElementById("cnvsFrame");
+	renderer = new THREE.WebGLRenderer({canvas:theCanvas,antialias:true});
+	
+	renderer.setSize(theCanvasFrame.clientWidth,theCanvasFrame.clientHeight);
+	renderer.setClearColor(0xdddddd);
+	//////////for//shadow////////
+	renderer.shadowMapEnabled = true;
+	renderer.shadowMapType = THREE.PCFShadowMap;
+	/////////////////////////////
+	renderer.autoClear = false;
+	window.addEventListener('resize', onWindowResize, false);
+	theCanvas.addEventListener('mousemove', onDocumentMouseMove, false);
+	
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.top = '0px';
+	stats.domElement.style.zIndex = 100;
+	document.body.appendChild( stats.domElement );
+	
+	scene = new THREE.Scene();
+	camera = new THREE.PerspectiveCamera(50, theCanvasFrame.clientWidth / theCanvasFrame.clientHeight, 1, 5000);
+	camera.position.x = 0;
+	camera.position.y = 150;
+	camera.position.z = 220;
+	camera.lookAt(new THREE.Vector3(0,0,0));
+	scene.add(camera);
+	
+	//control = new THREE.OrbitControls(camera, renderer.domElement);
+	
+	/*var gridXZ = new THREE.GridHelper(100, 10);
+	gridXZ.setColors(new THREE.Color(0xff0000), new THREE.Color(0xffffff));
+	scene.add(gridXZ);*/
+	
+	ambientlight = new THREE.AmbientLight(0xdddddd);
+	scene.add(ambientlight);
+	////////////////spotlight//////////////////////
+	spotlight = new THREE.SpotLight(0xffffff);
+	spotlight.position.set(-200,200,200);
+	spotlight.angle = Math.PI / 3;
+	spotlight.exponent = 20;
+	spotlight.castShadow = true;
+	spotlight.shadowCameraNear = 50;
+	spotlight.shadowCameraFar = camera.far;
+	spotlight.shadowCameraFov = spotlight.angle / Math.PI * 180;
+	spotlight.shadowBias = -0.00022;
+	spotlight.shadowDarkness = 0.6;
+	spotlight.shadowMapWidth = 2048;
+	spotlight.shadowMapHeight = 2048;
+	scene.add(spotlight);
+	///////////////////////////////////////////////
+	// FLOOR
+	floor = new THREE.Mesh(new THREE.PlaneBufferGeometry(200, 240),
+		new THREE.ShaderMaterial({
+        uniforms: {
+            time: {
+                type: 'f',
+                value: 1.0
+            }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader4').textContent
+    }));
+	floor.position.set(0,-0.5,0);
+	floor.rotation.x = -Math.PI/2;
+	scene.add(floor);
+	pickables.push(floor);
+	///////////////////////////////////////////////////////////////////
+	///////skyBox////////
+	THREE.ImageUtils.crossOrigin = '';
+	var pztex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_pz.jpg");
+    var pytex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_py.jpg");
+    var pxtex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_px.jpg");
+    var nztex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_nz.jpg");
+    var nytex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_ny.jpg");
+    var nxtex = THREE.ImageUtils.loadTexture("images/Mettle_Skybox_Cubic_nx.jpg");
+
+    var materialArray = [];
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: pxtex,
+        side: THREE.DoubleSide
+    }));
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: nxtex,
+        side: THREE.DoubleSide
+    }));
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: pytex,
+        side: THREE.DoubleSide
+    }));
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: nytex,
+        side: THREE.DoubleSide
+    }));
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: pztex,
+        side: THREE.DoubleSide
+    }));
+    materialArray.push(new THREE.MeshBasicMaterial({
+        map: nztex,
+        side: THREE.DoubleSide
+    }));
+
+    var skyboxGeometry = new THREE.BoxGeometry(700, 700, 700);
+    var skyboxMaterial = new THREE.MeshFaceMaterial(materialArray);
+    var skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+	skybox.rotation.x = Math.PI/2;
+	skybox.rotation.y = Math.PI;
+    scene.add(skybox);
+	/////////////////////
+	
+	wall1 = new THREE.Mesh(new THREE.BoxGeometry(70,30,10),new THREE.MeshBasicMaterial({transparent:true,color:0x8500dd,opacity:0.4}));
+	wall1.position.set(75, 15, 105);
+    scene.add(wall1);
+	
+    wall2 = wall1.clone();
+    wall2.position.set(-75, 15, 105);
+    scene.add(wall2);
+	
+	wall3 = wall1.clone();
+    wall3.position.set(75, 15, -105);
+    scene.add(wall3);
+	
+	wall4 = wall1.clone();
+    wall4.position.set(-75, 15, -105);
+    scene.add(wall4);
+	
+    wall5 = new THREE.Mesh(new THREE.BoxGeometry(200,30,10),new THREE.MeshBasicMaterial({transparent:true,color:0x8500dd,opacity:0.4}));
+    wall5.rotation.y = Math.PI / 2;
+    wall5.position.set(105, 15, 0);
+    scene.add(wall5);
+	
+    wall6 = wall5.clone();
+    wall6.position.set(-105, 15, 0);
+    scene.add(wall6);
+	
+	paddle1 = new THREE.Mesh(new THREE.BoxGeometry(50,30,10),new THREE.MeshBasicMaterial({transparent:true,color:0xfbfb35,opacity:0.4}));
+	paddle1.position.set(0, 15, 105);
+	scene.add(paddle1);
+	
+	paddle2 = new THREE.Mesh(new THREE.BoxGeometry(50,30,10),new THREE.MeshBasicMaterial({transparent:true,color:0xfbfb35,opacity:0.4}));
+	paddle2.position.set(0, 15, -105);
+	scene.add(paddle2);
+	
+	puckMaterial1 = new THREE.ShaderMaterial({
+        uniforms: {
+            time: {
+                type: 'f',
+                value: 1.0
+            }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader1').textContent
+    });
+	puckMaterial2 = new THREE.ShaderMaterial({
+        uniforms: {
+            time: {
+                type: 'f',
+                value: 1.0
+            }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader2').textContent
+    });
+	puckMaterial3 = new THREE.ShaderMaterial({
+        uniforms: {
+            time: {
+                type: 'f',
+                value: 1.0
+            }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader3').textContent
+    });
+	
+	////////shadow//////////
+	/*scene.traverse(function (mesh){
+		if(mesh instanceof(THREE.Mesh)){
+			mesh.castShadow = true;
+			mesh.receiveShadow = true;
+		}
+	});*/
+	////cast&receive=true///
+}
+
+function onWindowResize() {
+	camera.aspect = theCanvasFrame.clientWidth / theCanvasFrame.clientHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize(theCanvasFrame.clientWidth, theCanvasFrame.clientHeight);
+}
+
+function animate() {
+	var delta = clock.getDelta();
+	stats.update();
+	//control.update();
+	if(!gameover){
+		for(var i=0;i<pucks.length;i++){
+			pucks[i].update(delta);
+			pucks[i].collision(scene,pucks,i,wall2.position.x+35,wall1.position.x-35,paddle1.position.x,direction);
+		}
+	}
+	puckMaterial1.uniforms.time.value += delta * 5;
+	puckMaterial2.uniforms.time.value += delta * 5;
+	puckMaterial3.uniforms.time.value += delta * 5;
+	floor.material.uniforms.time.value += delta * 0.3;
+	
+	render();
+	requestAnimationFrame(animate);
+}
+
+function render() {
+	renderer.clear();
+	renderer.render(scene, camera);
+	renderer.render(sceneHUD, cameraHUD);
+}
+
+function start(){
+	document.getElementById('logined').style.display = 'none';
+	time=0;
+	life=5;
+	textL.geometry=geo5.clone();
+	wall1.position.x=75;
+	wall2.position.x=-75;
+	wall3.position.x=75;
+	wall4.position.x=-75;
+	paddle1.position.x=0;
+	paddle2.position.x=0;
+	if(gameover==true){
+		sceneHUD.remove( textOver );
+	}
+	sceneHUD.add( textStart );
+	startSound.play();
+	gameover=false;
+	setTimeout(function(){ sceneHUD.remove( textStart ); }, 1000);
+	setTimeout(addPuck,1000);
+	setTimeout(addTime,1000);
+}
+
+function addPuck(){
+	var newPuck;
+	
+	if(!gameover){
+		if(pucks.length<3){
+			puckStyle++;
+			switch(puckStyle){
+				case 1:
+					newPuck=new Puck(puckMaterial1);
+					break;
+				case 2:
+					newPuck=new Puck(puckMaterial2);
+					break;
+				case 3:
+					newPuck=new Puck(puckMaterial3);
+					puckStyle=0;
+					break;
+			}
+			newPuck.pos = new THREE.Vector3(0,1,0);
+			newPuck.vel = new THREE.Vector3(60, 0, 105);
+			pucks.push(newPuck);
+			scene.add(newPuck.mesh);
+		}
+		setTimeout(addPuck,3000);
+	}
+}
+
+function subLife(){
+	life--;
+	switch(life){
+		case 0:
+			textL.geometry=geo0.clone();
+			gameover=true;
+			sceneHUD.add( textOver );
+			overSound.play();
+			for(var i=0;i<pucks.length;i++){
+				scene.remove(pucks[i].mesh);
+			}
+			pucks=[];
+			if(userHighScore<time){
+				userHighScore = time;
+				document.getElementById('greeting').innerHTML +="<br/>***Your High Score***: "+userHighScore;
+				saveRecords();
+			}else{
+				document.getElementById('greeting').innerHTML +="<br/>Your score: "+time;
+			}
+			document.getElementById('logined').style.display = 'block';
+			break;
+		case 1:
+			textL.geometry=geo1.clone();
+			break;
+		case 2:
+			textL.geometry=geo2.clone();
+			break;
+		case 3:
+			textL.geometry=geo3.clone();
+			break;
+		case 4:
+			textL.geometry=geo4.clone();
+			break;
+	}
+}
+
+function addTime(){
+	if(!gameover){
+		time++;
+		if(time==60){
+			wall1.position.x+=15;
+			wall2.position.x-=15;
+			wall3.position.x+=15;
+			wall4.position.x-=15;
+		}
+		if(time<1000){
+			var h = Math.floor(time / 100);
+			var t = Math.floor((time-h*100) / 10);
+			var s = time%10;
+			switch(h){
+				case 0:
+					textH.geometry=geo0.clone();
+					break;
+				case 1:
+					textH.geometry=geo1.clone();
+					break;
+				case 2:
+					textH.geometry=geo2.clone();
+					break;
+				case 3:
+					textH.geometry=geo3.clone();
+					break;
+				case 4:
+					textH.geometry=geo4.clone();
+					break;
+				case 5:
+					textH.geometry=geo5.clone();
+					break;
+				case 6:
+					textH.geometry=geo6.clone();
+					break;
+				case 7:
+					textH.geometry=geo7.clone();
+					break;
+				case 8:
+					textH.geometry=geo8.clone();
+					break;
+				case 9:
+					textH.geometry=geo9.clone();
+					break;
+			}
+			switch(t){
+				case 0:
+					textT.geometry=geo0.clone();
+					break;
+				case 1:
+					textT.geometry=geo1.clone();
+					break;
+				case 2:
+					textT.geometry=geo2.clone();
+					break;
+				case 3:
+					textT.geometry=geo3.clone();
+					break;
+				case 4:
+					textT.geometry=geo4.clone();
+					break;
+				case 5:
+					textT.geometry=geo5.clone();
+					break;
+				case 6:
+					textT.geometry=geo6.clone();
+					break;
+				case 7:
+					textT.geometry=geo7.clone();
+					break;
+				case 8:
+					textT.geometry=geo8.clone();
+					break;
+				case 9:
+					textT.geometry=geo9.clone();
+					break;
+			}
+			switch(s){
+				case 0:
+					textS.geometry=geo0.clone();
+					break;
+				case 1:
+					textS.geometry=geo1.clone();
+					break;
+				case 2:
+					textS.geometry=geo2.clone();
+					break;
+				case 3:
+					textS.geometry=geo3.clone();
+					break;
+				case 4:
+					textS.geometry=geo4.clone();
+					break;
+				case 5:
+					textS.geometry=geo5.clone();
+					break;
+				case 6:
+					textS.geometry=geo6.clone();
+					break;
+				case 7:
+					textS.geometry=geo7.clone();
+					break;
+				case 8:
+					textS.geometry=geo8.clone();
+					break;
+				case 9:
+					textS.geometry=geo9.clone();
+					break;
+			}
+		}
+		setTimeout(addTime,1000);
+	}
+}
+
+function onDocumentMouseMove(event) {
+    event.preventDefault();
+    mouse.x = ((event.clientX-event.target.offsetLeft) / theCanvasFrame.clientWidth) * 2 - 1;
+    mouse.y = -((event.clientY-event.target.offsetTop) / theCanvasFrame.clientHeight) * 2 + 1;
+
+    var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
+    raycaster.set(camera.position, vector.sub(camera.position).normalize());
+    var intersects = raycaster.intersectObjects(pickables);
+	
+	if (intersects.length > 0){
+		lastPosX = newPosX;
+		if(intersects[0].point.x+25>wall1.position.x-35){
+			paddle1.position.x=wall1.position.x-60;
+			paddle2.position.x=wall1.position.x-60;
+		}else if(intersects[0].point.x-25<wall2.position.x+35){
+			paddle1.position.x=wall2.position.x+60;
+			paddle2.position.x=wall2.position.x+60;
+		}else{
+			paddle1.position.x=intersects[0].point.x;
+			paddle2.position.x=intersects[0].point.x;
+		}
+		newPosX = paddle1.position.x;
+		direction = newPosX - lastPosX;
+    }
+}
+
+function loadRecords(){
+	var objStr = localStorage.getItem("scores");
+	if(JSON.parse(objStr)!=null){
+		records = JSON.parse(objStr);
+	}
+}
+
+function saveRecords(){
+	if(userName.trim().length==0){
+		return;
+	}
+	for (var i = 0; i < records.length; i++) {
+        if (records[i].name === userName) {
+            records[i].score = userHighScore;
+			var objStr = JSON.stringify(records);
+			localStorage.setItem("scores", objStr);
+			return;
+        }
+    }
+	
+	 records.push({
+        name: userName,
+        score: userHighScore
+    });
+	var objStr = JSON.stringify(records);
+    localStorage.setItem("scores", objStr);
+}
+
+function loginBtnClick(){
+	loadRecords();
+    userName = document.getElementById('user').value;
+
+    var result = searchUser(userName);
+    if (result >= 0) {
+		userHighScore = result;
+        document.getElementById('greeting').innerHTML = userName+", Your High Score:" + result;
+    } else {
+        document.getElementById('greeting').innerHTML = "Welcome!  "+userName;
+    }
+	document.getElementById('login').style.display = 'none';//'none', 'block'
+	document.getElementById('logined').style.display = 'block';
+}
+
+function searchUser(name){
+    for (var i = 0; i < records.length; i++) {
+        if (records[i].name === name) {
+            return records[i].score;
+        }
+    }
+    return -1;
+}
+
+function logoutBtnClick(){
+	document.getElementById('logined').style.display = 'none';
+	document.getElementById('login').style.display = 'block';
+	document.getElementById('greeting').innerHTML = '';
+	userHighScore = 0;
+}
+
+function BGMBtnClick(){
+	if(!BGMSwitch){
+		document.getElementById('BGMBtn').textContent = 'Off';
+		BGMVol=0;
+	}else{
+		document.getElementById('BGMBtn').textContent = 'On';
+		BGMVol=0.5;
+	}
+	BGM.volume=BGMVol;
+	BGMSwitch=!BGMSwitch;
+}
+
+function SEBtnClick(){
+	if(!SESwitch){
+		document.getElementById('SEBtn').textContent = 'Off';
+		SEVol=0;
+	}else{
+		document.getElementById('SEBtn').textContent = 'On';
+		SEVol=0.5;
+	}
+	collisionSound.volume=SEVol;
+	fallSound.volume=SEVol;
+	overSound.volume=SEVol;
+	startSound.volume=SEVol;
+	SESwitch=!SESwitch;
+}
+</script>
+</body>
+</html>
