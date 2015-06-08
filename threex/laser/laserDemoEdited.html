@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<script src='../../js/three.min.js' ></script>
+<script src='threex.laserbeam.js'></script>
+<script src='threex.lasercooked.js'></script>
+<body style='margin: 0px; background-color: #bbbbbb; overflow: hidden;'><script>
+var renderer,scene,camera,clock;
+////////////////
+var nLasers=10;
+var lasers = [];
+////////////////
+var mesh;
+var angle=0;
+
+init();
+animations();
+function init(){
+	clock = new THREE.Clock();
+	renderer	= new THREE.WebGLRenderer();
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+	renderer.setClearColor('black',1);
+	
+	scene	= new THREE.Scene();
+	camera	= new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000 );
+	camera.position.set(0,5,10);
+	camera.lookAt( scene.position )
+	/////////////////////////////////////
+	for(var i = 0; i < nLasers; i++){
+		var laserBeam	= new THREEx.LaserBeam();
+		scene.add(laserBeam);
+		var laserCooked	= new THREEx.LaserCooked(laserBeam);
+		
+		lasers.push(laserCooked);
+		
+		laserBeam.position.x= (i-nLasers/2)/2;	
+		laserBeam.position.y= 4;
+		laserBeam.rotation.z= -Math.PI/2;
+	}
+	/////////////////////////////////////
+	var geometry	= new THREE.BoxGeometry(1, 1, 1);
+	var material	= new THREE.MeshPhongMaterial({
+		color	: 0xaa8888,
+		//////////////////////
+		specular: 0xffffff,
+		shininess: 50,
+		//////////////////////
+		side	: THREE.BackSide,
+	});
+	var object3d	= new THREE.Mesh( geometry, material );
+	object3d.scale.set(10,8,10);
+	scene.add(object3d);
+	
+	
+	mesh = new THREE.Mesh(new THREE.SphereGeometry(1,32,32),
+								new THREE.MeshPhongMaterial({
+		color	: 0x00ff00,
+		//////////////////////
+		specular: 0xffffff,
+		shininess: 50
+		//////////////////////
+	}));
+	scene.add(mesh);
+}
+function animations(){
+	var dt = clock.getDelta();
+	angle+=dt;
+	mesh.position.set(3.0*Math.sin(angle),3.0*Math.cos(angle),-0.1);  // z must !=0  or  laser will go through it 
+	
+	//////////////////////////////////
+	for(var i=0;i<lasers.length;i++){
+		lasers[i].update();
+	}
+	//////////////////////////////////
+	
+	render();
+	requestAnimationFrame( animations );
+}
+function render(){
+	renderer.render( scene, camera );
+}
+</script></body>

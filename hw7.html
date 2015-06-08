@@ -77,6 +77,8 @@ body {
 </audio>
 
 <script src="js/three.min.js"></script> 
+<script src='threex/3Dtext/threex.text.js'></script>
+<script src='threex/3Dtext/droid_serif_bold.typeface.js'></script>
 <!--<script src="js/OrbitControls.js"></script>-->
 <script src="js/Stats.js"></script>
 <script src="js/janda_manatee_solid_regular.typeface.js"></script>
@@ -331,6 +333,8 @@ var time=0,life=5;
 var gameover=false;
 var records=[];
 var userName,userHighScore=0;
+
+var text3D;
 
 init();
 animate();
@@ -647,6 +651,11 @@ function init() {
         vertexShader: document.getElementById('vertexShader').textContent,
         fragmentShader: document.getElementById('fragmentShader3').textContent
     });
+	
+	text3D = new THREEx.Text('Lucky Ball');
+	text3D.scale.multiplyScalar(20);
+	text3D.position.set(-130,60,-100);
+	scene.add(text3D);
 	
 	////////shadow//////////
 	/*scene.traverse(function (mesh){
